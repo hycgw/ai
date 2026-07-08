@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI对话</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    borderRadius: {
+                        'xl': '16px',
+                        '2xl': '20px',
+                        '3xl': '28px',
+                    },
+                    colors: {
+                        primary: '#6366f1',
+                        soft: '#f5f7ff',
+                        graysoft: '#eef2ff',
+                    },
+                    fontFamily: {
+                        cute: ['system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            font-family: system-ui;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 999px;
+        }
+        .modal-shadow {
+            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15);
+        }
+        .btn-round {
+            transition: all 0.2s ease;
+        }
+        .btn-round:hover {
+            transform: translateY(-2px);
+        }
+        .message-ani {
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from {opacity:0; transform: translateY(8px);}
+            to {opacity:1; transform: translateY(0);}
+        }
+        .loading-dot span {
+            animation: dot 1.4s infinite;
+        }
+        .loading-dot span:nth-child(2) {animation-delay:0.2s}
+        .loading-dot span:nth-child(3) {animation-delay:0.4s}
+        @keyframes dot {
+            0%,100% {opacity:0.2}
+            50% {opacity:1}
+        }
+    </style>
+</head>
+<body class="bg-soft h-screen flex flex-col overflow-hidden">
+    <!-- 首次使用密钥弹窗 -->
+    <div id="firstModal" class="fixed inset-0 bg-black/30 flex items-center justify-center z-50 hidden">
+        <div class="bg-white w-[90%] max-w-md rounded-3xl p-7 modal-shadow message-ani">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">首次使用</h2>
+            <p class="text-gray-500 mb-5">请填入你的 API 密钥 Key</p>
+            <input id="firstKeyInput" type="password" placeholder="输入密钥 Key" class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-primary/60 mb-4">
+            <p class="text-xs text-gray-400 mb-6">请确保密钥已充值，本页面不会上传、泄露你的密钥</p>
+            <button onclick="saveFirstKey()" class="w-full bg-primary text-white py-3 rounded-xl btn-round font-medium">OK</button>
+        </div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div id="setModal" class="fixed inset-0 bg-black/30 flex items-center justify-center z-50 hidden">
+        <div class="bg-white w-[90%] max-w-md rounded-3xl p-7 modal-shadow message-ani max-h-[85vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-xl font-semibold text-gray-800">设置面板</h2>
+                <i onclick="closeSetModal()" class="fa fa-times text-gray-400 text-xl cursor-pointer hover:text-gray-600"></i>
+            </div>
+            <!-- AI自定义名称 -->
+            <div class="mb-5">
+                <label class="text-sm text-gray-600 block mb-2">自定义AI昵称</label>
+                <input id="aiNameInput" placeholder="例如：小对话鸭" class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-primary/60">
+            </div>
+            <!-- 大模型选择 -->
+            <div class="mb-5">
+                <label class="text-sm text-gray-600 block mb-2">选择大模型</label>
+                <select id="modelSelect" class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-primary/60 bg-white">
+                    <option value="deepseek-chat">DeepSeek Chat</option>
+                    <option value="deepseek-v3">DeepSeek V3</option>
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                    <option value="qwen-turbo">通义千问 Turbo</option>
+                    <option value="glm-4">GLM-4</option>
+                    <option value="llama3-70b">Llama3 70B</option>
+                </select>
+            </div>
+            <!-- Key输入 -->
+            <div class="mb-5">
+                <label class="text-sm text-gray-600 block mb-2">API密钥 Key</label>
+                <input id="setKeyInput" type="password" placeholder="填入你的密钥" class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-primary/60">
+            </div>
+            <p class="text-xs text-gray-400 mb-6">提示：请确保您的密钥已充值，我们不会收集、泄露你的密钥信息，数据仅保存在本地浏览器</p>
+            <button onclick="saveAllConfig()" class="w-full bg-primary text-white py-3 rounded-xl btn-round font-medium mb-3">确定保存</button>
+            <div id="loadingTip" class="hidden text-center py-3 text-gray-500 loading-dot">
+                正在保存配置
+                <span>.</span><span>.</span><span>.</span>
+            </div>
+            <p id="saveSuccessTip" class="hidden text-center text-green-500 py-2">保存成功！下次无需重复填写，请勿清除浏览器数据</p>
+        </div>
+    </div>
+
+    <!-- 顶部标题栏 -->
+    <header class="flex items-center justify-between px-5 py-4 bg-white shadow-sm rounded-b-2xl">
+        <h1 class="text-lg font-bold text-gray-800">AI对话</h1>
+        <div class="flex gap-3">
+            <button onclick="exportChatLog()" class="px-3 py-2 rounded-xl bg-graysoft text-sm text-gray-700 btn-round">
+                <i class="fa fa-download mr-1"></i>导出记录
+            </button>
+        </div>
+    </header>
+
+    <!-- 聊天区域 -->
+    <main id="chatBox" class="flex-1 overflow-y-auto p-5 gap-4 flex flex-col">
+        <div class="text-center text-gray-400 py-10">
+            开始和 <span id="showAiName">AI助手</span> 对话吧
+        </div>
+    </main>
+
+    <!-- 底部输入框 -->
+    <footer class="bg-white p-4 rounded-t-2xl shadow-inner">
+        <div class="flex gap-3 items-end">
+            <!-- 左下角设置按钮 -->
+            <button onclick="openSetModal()" class="w-11 h-11 rounded-full bg-graysoft flex items-center justify-center text-gray-600 btn-round shrink-0">
+                <i class="fa fa-cog text-lg"></i>
+            </button>
+            <textarea id="userInput" rows="1" placeholder="输入消息..." class="flex-1 px-4 py-3 rounded-2xl border border-gray-100 bg-graysoft outline-primary/50 resize-none max-h-32"></textarea>
+            <button onclick="sendMessage()" class="px-5 py-3 rounded-xl bg-primary text-white btn-round shrink-0">发送</button>
+        </div>
+    </footer>
+
+    <script>
+        // 本地存储key、模型、AI昵称、聊天记录
+        const storage = {
+            get(key) {
+                const val = localStorage.getItem(key);
+                try {return JSON.parse(val)} catch {return val}
+            },
+            set(key, data) {
+                localStorage.setItem(key, JSON.stringify(data))
+            }
+        }
+
+        // 初始化数据
+        let config = storage.get('aiConfig') || {
+            key: "",
+            model: "deepseek-chat",
+            aiName: "AI助手"
+        }
+        let chatList = storage.get('chatHistory') || []
+        const firstModal = document.getElementById('firstModal')
+        const setModal = document.getElementById('setModal')
+        const loadingTip = document.getElementById('loadingTip')
+        const saveSuccessTip = document.getElementById('saveSuccessTip')
+        const chatBox = document.getElementById('chatBox')
+        const showAiName = document.getElementById('showAiName')
+
+        // 页面加载
+        window.onload = () => {
+            // 更新AI名称展示
+            showAiName.innerText = config.aiName
+            // 填充设置面板内容
+            document.getElementById('aiNameInput').value = config.aiName
+            document.getElementById('modelSelect').value = config.model
+            document.getElementById('setKeyInput').value = config.key
+            // 无密钥则弹出首次弹窗
+            if (!config.key) {
+                firstModal.classList.remove('hidden')
+            }
+            renderChat()
+        }
+
+        // 首次弹窗保存密钥
+        function saveFirstKey() {
+            const key = document.getElementById('firstKeyInput').value.trim()
+            if (!key) return alert("请输入密钥Key")
+            config.key = key
+            storage.set('aiConfig', config)
+            firstModal.classList.add('hidden')
+            alert("密钥保存完成，现在可以对话啦！")
+        }
+
+        // 打开设置弹窗
+        function openSetModal() {
+            setModal.classList.remove('hidden')
+            loadingTip.classList.add('hidden')
+            saveSuccessTip.classList.add('hidden')
+        }
+        // 关闭设置弹窗
+        function closeSetModal() {
+            setModal.classList.add('hidden')
+        }
+
+        // 保存全部设置
+        function saveAllConfig() {
+            const aiName = document.getElementById('aiNameInput').value.trim() || "AI助手"
+            const model = document.getElementById('modelSelect').value
+            const key = document.getElementById('setKeyInput').value.trim()
+            if (!key) return alert("密钥不能为空")
+
+            loadingTip.classList.remove('hidden')
+            saveSuccessTip.classList.add('hidden')
+
+            // 模拟加载延时
+            setTimeout(() => {
+                config = {key, model, aiName}
+                storage.set('aiConfig', config)
+                showAiName.innerText = aiName
+                loadingTip.classList.add('hidden')
+                saveSuccessTip.classList.remove('hidden')
+            }, 1200)
+        }
+
+        // 渲染聊天记录
+        function renderChat() {
+            chatBox.innerHTML = ""
+            if (chatList.length === 0) {
+                chatBox.innerHTML = `<div class="text-center text-gray-400 py-10">开始和 <span id="showAiName">${config.aiName}</span> 对话吧</div>`
+                return
+            }
+            chatList.forEach(item => {
+                addMessageDom(item.type, item.content, false)
+            })
+        }
+
+        // 新增消息DOM
+        function addMessageDom(type, text, isNew = true) {
+            const wrap = document.createElement('div')
+            wrap.className = `message-ani flex ${type === 'user' ? 'justify-end' : 'justify-start'}`
+            if (type === 'user') {
+                wrap.innerHTML = `
+                    <div class="max-w-[75%] bg-primary text-white px-4 py-3 rounded-2xl rounded-tr-sm">
+                        <p>${text}</p>
+                    </div>
+                `
+            } else {
+                wrap.innerHTML = `
+                    <div class="max-w-[75%] bg-white px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
+                        <p class="text-xs text-gray-400 mb-1">${config.aiName}</p>
+                        <p class="text-gray-800">${text}</p>
+                    </div>
+                `
+            }
+            chatBox.appendChild(wrap)
+            chatBox.scrollTop = chatBox.scrollHeight
+        }
+
+        // 发送消息
+        function sendMessage() {
+            const input = document.getElementById('userInput')
+            const text = input.value.trim()
+            if (!text) return
+            if (!config.key) {
+                alert("请先在左下角设置填入密钥Key")
+                openSetModal()
+                return
+            }
+            // 用户消息
+            chatList.push({type:"user", content:text})
+            storage.set('chatHistory', chatList)
+            addMessageDom('user', text)
+            input.value = ""
+
+            // 模拟AI回复
+            setTimeout(()=>{
+                const reply = `已收到你的消息：${text}\n当前使用模型：${config.model}\n我是${config.aiName}，本地密钥已正常加载。`
+                chatList.push({type:"ai", content:reply})
+                storage.set('chatHistory', chatList)
+                addMessageDom('ai', reply)
+            }, 800)
+        }
+
+        // 导出聊天记录
+        function exportChatLog() {
+            if (chatList.length === 0) return alert("暂无聊天记录")
+            let text = `==== AI对话记录 ====\nAI昵称：${config.aiName}\n模型：${config.model}\n\n`
+            chatList.forEach(item=>{
+                const tag = item.type === "user" ? "我" : config.aiName
+                text += `【${tag}】${item.content}\n\n`
+            })
+            const blob = new Blob([text], {type:"text/plain"})
+            const a = document.createElement('a')
+            a.href = URL.createObjectURL(blob)
+            a.download = `AI对话记录_${new Date().getTime()}.txt`
+            a.click()
+        }
+    </script>
+</body>
+</html>
